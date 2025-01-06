@@ -208,67 +208,187 @@ local Button = AimlockTab:CreateButton({
 local ESPTab = Window:CreateTab("ESP", nil) -- Title, Image
 local ESPSection = ESPTab:CreateSection("ESP")
 
+-- ESP Tab - Boxes
 local Button = ESPTab:CreateButton({
-   Name = "cham esp",
-   Callback = function()
-        local Settings = {
-	['Material'] = Enum.Material.Neon, -- Material
-	['Color'] = Color3.fromRGB(0,255,255), -- Color
-	['Transparency'] = 0.7 -- 0 to 1 Transparency
-}
+    Name = "ESP Boxes",
+    Callback = function()
+        local settings = {
+            defaultcolor = Color3.fromRGB(255, 0, 0),
+            teamcheck = false,
+            teamcolor = true
+        }
 
-local ScreenGui = Instance.new('ScreenGui', game.CoreGui) -- Create screengui
-ScreenGui.IgnoreGuiInset = true
+        local runService = game:GetService("RunService")
+        local players = game:GetService("Players")
+        local localPlayer = players.LocalPlayer
+        local camera = workspace.CurrentCamera
 
-local ViewportFrame = Instance.new('ViewportFrame', ScreenGui) -- Create viewport and define properties
-ViewportFrame.CurrentCamera = workspace.CurrentCamera
-ViewportFrame.Size = UDim2.new(1,0,1,0)
-ViewportFrame.BackgroundTransparency = 1
-ViewportFrame.ImageTransparency = Settings.Transparency
+        local espCache = {}
 
-local Chasms = {} -- Array for storing parts
+        -- Function to create ESP box for a player
+        local function createEsp(player)
+            local drawings = {}
+            -- Create the main ESP box
+            drawings.box = Drawing.new("Square")
+            drawings.box.Thickness = 1
+            drawings.box.Filled = false
+            drawings.box.Color = settings.defaultcolor
+            drawings.box.Visible = false
+            drawings.box.ZIndex = 2
 
-function generateChasm(player) -- functions that generates chasms for the player specififed
-	local Character = workspace:FindFirstChild(player.Name)
-	
-	if Character then
-		for _,Part in pairs(Character:GetChildren()) do
-			if Part:IsA('Part') or Part:IsA('MeshPart') then
-				local Chasm = Part:Clone()
-				
-				for _,Child in pairs(Chasm:GetChildren()) do
-					if Child:IsA('Decal') then
-						Child:Destroy()
-					end
-				end
-				
-				Chasm.Parent = ViewportFrame
-				Chasm.Material = Settings.Material
-				Chasm.Color = Settings.Color
-				Chasm.Anchored = true
-				
-				table.insert(Chasms, Chasm)
-			end
-		end
-	end
-end
+            -- Create the outline for the box
+            drawings.boxoutline = Drawing.new("Square")
+            drawings.boxoutline.Thickness = 3
+            drawings.boxoutline.Filled = false
+            drawings.boxoutline.Color = Color3.new()
+            drawings.boxoutline.Visible = false
+            drawings.boxoutline.ZIndex = 1
 
-function clearChasms() -- remove all chasms
-	for _,Chasm in pairs(Chasms) do
-		Chasm:Destroy()
-	end
-	
-	Chasms = {}
-end
+            espCache[player] = drawings
+        end
 
-while game:GetService('RunService').RenderStepped:Wait() do -- loop this process
-	clearChasms()
-	
-	for _,Player in pairs(game:GetService('Players'):GetPlayers()) do
-		if Player ~= game:GetService('Players').LocalPlayer then
-			generateChasm(Player)
-		end
-	end
-end
-   end,
+        -- Function to remove ESP when a player leaves
+        local function removeEsp(player)
+            if espCache[player] then
+                for _, drawing in pairs(espCache[player]) do
+                    drawing:Remove()
+                end
+                espCache[player] = nil
+            end
+        end
+
+        -- Function to update ESP box position
+        local function updateEsp(player, esp)
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local position, visible = camera:WorldToViewportPoint(character.HumanoidRootPart.Position)
+                esp.box.Visible = visible
+                esp.boxoutline.Visible = visible
+
+                if visible then
+                    -- Calculate box size and position based on distance
+                    local scaleFactor = 1 / (position.Z * math.tan(math.rad(camera.FieldOfView / 2)) * 2) * 1000
+                    local width, height = math.round(4 * scaleFactor), math.round(5 * scaleFactor)
+                    local x, y = math.round(position.X), math.round(position.Y)
+
+                    esp.box.Size = Vector2.new(width, height)
+                    esp.box.Position = Vector2.new(x - width / 2, y - height / 2)
+                    esp.box.Color = settings.teamcolor and player.TeamColor.Color or settings.defaultcolor
+
+                    esp.boxoutline.Size = esp.box.Size
+                    esp.boxoutline.Position = esp.box.Position
+                end
+            else
+                esp.box.Visible = false
+                esp.boxoutline.Visible = false
+            end
+        end
+
+        -- Apply ESP to all current players
+        for _, player in pairs(players:GetPlayers()) do
+            if player ~= localPlayer then
+                createEsp(player)
+            end
+        end
+
+        -- Handle new players joining the game
+        players.PlayerAdded:Connect(function(player)
+            createEsp(player)
+        end)
+
+        -- Handle players leaving the game
+        players.PlayerRemoving:Connect(function(player)
+            removeEsp(player)
+        end)
+
+        -- Continuously update the ESP boxes for all players
+        runService.RenderStepped:Connect(function()
+            for player, drawings in pairs(espCache) do
+                if settings.teamcheck and player.Team == localPlayer.Team then
+                end
+
+                if player ~= localPlayer then
+                    updateEsp(player, drawings)
+                end
+            end
+        end)
+    end
 })
+
+local Button = ESPTab:CreateButton({
+    Name = "ESP Names",
+    Callback = function()
+    -- Services
+local players = game:GetService("Players")
+local runService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
+local localPlayer = players.LocalPlayer
+
+-- Table to store the ESP drawings
+local nameEspCache = {}
+
+-- Function to create name ESP for a player
+local function createNameEsp(player)
+    if player == localPlayer then return end -- Don't show name for local player
+
+    local drawing = Drawing.new("Text")
+    drawing.Text = player.Name
+    drawing.Size = 8  -- Smaller text size
+    drawing.Color = Color3.new(1, 1, 1) -- White text
+    drawing.Outline = true
+    drawing.OutlineColor = Color3.new(0, 0, 0) -- Black outline
+    drawing.Center = true
+    drawing.Visible = false
+
+    nameEspCache[player] = drawing
+end
+-- Function to remove the ESP drawing when a player leaves
+local function removeNameEsp(player)
+    if nameEspCache[player] then
+        nameEspCache[player]:Remove()
+        nameEspCache[player] = nil
+    end
+end
+
+-- Function to update the ESP name position
+local function updateNameEsp(player, drawing)
+    local character = player.Character
+    if character and character:FindFirstChild("Head") then
+        local headPosition = character.Head.Position
+        local screenPosition, onScreen = camera:WorldToViewportPoint(headPosition)
+
+        if onScreen then
+            -- Offset below the head for the name label
+            drawing.Position = Vector2.new(screenPosition.X, screenPosition.Y + 20) -- Adjusted offset below the head
+            drawing.Visible = true
+        else
+            drawing.Visible = false
+        end
+    else
+        drawing.Visible = false
+    end
+end
+
+-- Apply name ESP to all current players
+for _, player in pairs(players:GetPlayers()) do
+    createNameEsp(player)
+end
+
+-- Handle new players joining the game
+players.PlayerAdded:Connect(function(player)
+    createNameEsp(player)
+end)
+
+-- Handle players leaving the game
+players.PlayerRemoving:Connect(function(player)
+    removeNameEsp(player)
+end)
+
+-- Continuously update the name ESPs for all players
+runService.RenderStepped:Connect(function()
+    for player, drawing in pairs(nameEspCache) do
+        updateNameEsp(player, drawing)
+    end
+    end)
+    end,
+ })
